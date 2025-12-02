@@ -1,0 +1,13 @@
+{
+  "name": "photo-app",
+  "version": "1.0.0",
+  "description": "Photo app with camera, upload, and gallery features",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

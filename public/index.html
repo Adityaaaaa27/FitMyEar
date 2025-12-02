@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Photo App</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="logo">LEAVENOONE</h1>
+      <button class="info-btn">?</button>
+    </header>
+
+    <main class="main-content">
+      <div class="hero-section">
+        <h2 class="hero-title">Capture & Share<br>Your Moments!</h2>
+        <p class="hero-subtitle">Take photos, upload from gallery, and view your collection with ease.</p>
+      </div>
+
+      <div class="options-container">
+        <div class="option-card" id="openCameraBtn">
+          <div class="option-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 15.2a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z"/>
+              <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+            </svg>
+          </div>
+          <span class="option-label">Open Camera</span>
+        </div>
+
+        <div class="option-card" id="uploadPhotoBtn">
+          <div class="option-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
+            </svg>
+          </div>
+          <span class="option-label">Upload Photo</span>
+        </div>
+
+        <div class="option-card" id="viewPhotosBtn">
+          <div class="option-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M22 16V4c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2zm-11-4l2.03 2.71L16 11l4 5H8l3-4zM2 6v14c0 1.1.9 2 2 2h14v-2H4V6H2z"/>
+            </svg>
+          </div>
+          <span class="option-label">View Photos</span>
+        </div>
+      </div>
+
+      <p class="help-link">Looking for help?</p>
+    </main>
+  </div>
+
+  <div class="camera-modal" id="cameraModal">
+    <div class="camera-container">
+      <div class="camera-header">
+        <button class="close-btn" id="closeCameraBtn">&times;</button>
+        <h3>Take Photo</h3>
+        <div class="placeholder"></div>
+      </div>
+      <div class="video-container">
+        <video id="cameraVideo" autoplay playsinline></video>
+        <canvas id="photoCanvas" style="display: none;"></canvas>
+      </div>
+      <div class="camera-controls">
+        <button class="capture-btn" id="captureBtn">
+          <div class="capture-inner"></div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gallery-modal" id="galleryModal">
+    <div class="gallery-container">
+      <div class="gallery-header">
+        <button class="close-btn" id="closeGalleryBtn">&times;</button>
+        <h3>Your Photos</h3>
+        <div class="placeholder"></div>
+      </div>
+      <div class="gallery-grid" id="galleryGrid">
+        <p class="empty-message" id="emptyMessage">No photos yet. Take or upload some photos!</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="lightbox-modal" id="lightboxModal">
+    <button class="lightbox-close" id="closeLightboxBtn">&times;</button>
+    <img src="" alt="Enlarged photo" class="lightbox-image" id="lightboxImage">
+  </div>
+
+  <input type="file" id="fileInput" accept="image/*" style="display: none;">
+
+  <script src="app.js"></script>
+</body>
+</html>
