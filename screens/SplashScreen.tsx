@@ -34,7 +34,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BrandColors.lightBackground,
+    backgroundColor: BrandColors.white,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logo: {
-    width: 220,
-    height: 220,
+    width: 280,
+    height: 280,
   },
 });
