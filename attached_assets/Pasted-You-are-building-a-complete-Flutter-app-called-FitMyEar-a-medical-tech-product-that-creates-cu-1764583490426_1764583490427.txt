@@ -1,0 +1,82 @@
+You are building a complete Flutter app called **FitMyEar**, a medical-tech product
+that creates custom-fit ear pieces from ear photos and 3D reconstruction.
+
+Use ONLY the FitMyEar logo color palette:
+
+Primary Blue:    #1A5CFF      (vibrant tech blue)
+Highlight Yellow: #FFD93D      (bright warm yellow)
+White:            #FFFFFF      (clean neutral)
+Dark Text:        #0A0A0A      (deep black)
+Light Background: #F7F7F8      (very soft white-grey)
+
+Brand Style:
+- Modern medical-tech.
+- Clean white surfaces.
+- Blue as the primary action color.
+- Yellow as an accent/highlight.
+- Minimal, sharp, futuristic UI.
+- Rounded corners, consistent spacing, soft shadows.
+- Typography: Inter / Poppins / SF Pro–style.
+
+Generate the **entire application UI** with the following screens: 
+
+1. **Splash Screen**
+   - Fullscreen video placeholder.
+   - White background.
+   - Centered FitMyEar logo in blue + yellow.
+   - Subtle fade-in animation.
+   - Auto-navigate after 3 seconds.
+
+2. **Sign In Screen**
+   - Blue header with logo.
+   - White card containing: Email + Password fields.
+   - Blue primary button: “Sign In”.
+   - Yellow accent for highlights and subtle borders.
+   - Text button: “Create an account”.
+
+3. **Sign Up Screen**
+   - Clean white background.
+   - Fields: Email, Password, Confirm Password.
+   - Blue primary button: “Create Account”.
+   - Yellow accent for focus states.
+
+4. **Home / Dashboard Screen**
+   - App bar: Blue with white logo.
+   - Three large cards:
+     - “Capture Ear Photos”
+     - “Upload Images”
+     - “3D Reconstruction Status”
+   - Cards use white background, blue icons, yellow accent bars.
+   - Soft shadows and rounded corners.
+
+5. **Camera Capture Screen**
+   - Live camera preview.
+   - White ear-outline overlay.
+   - Capture button in vibrant blue (#1A5CFF).
+   - Instruction text using black (#0A0A0A).
+   - Preview carousel/grid below.
+
+6. **Upload Screen**
+   - White background.
+   - Preview of captured images in rounded thumbnails.
+   - Blue primary button: “Upload to FitMyEar Cloud”.
+   - Yellow accent along progress indicators.
+
+7. **Reconstruction Status Screen**
+   - Blue progress steps: “Queued → Processing → Completed”.
+   - Yellow dots or highlights for active steps.
+   - Placeholder area for future 3D model viewer.
+
+8. **Settings / Profile Screen**
+   - White cards with black text.
+   - Blue icons.
+   - “Sign Out” button in yellow accent.
+
+Design Requirements:
+- Use ONLY: Blue (#1A5CFF), Yellow (#FFD93D), White (#FFFFFF), Black (#0A0A0A), Light Grey (#F7F7F8).
+- No teal, turquoise, or green shades.
+- Keep everything clean, premium, medical-tech.
+- Use modern animations, consistent spacing, responsive layout.
+- Generate full Flutter UI code or equivalent component structure.
+
+Create the full app layout with navigation, components, and theming based strictly on this color palette.

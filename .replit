@@ -16,15 +16,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Photo App Server"
+args = "FitMyEar App"
 
 [[workflows.workflow]]
-name = "Photo App Server"
+name = "FitMyEar App"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node server.js"
+args = "npx expo start --web --port 5000"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
@@ -35,5 +35,9 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 44161
+localPort = 5001
 externalPort = 3000
+
+[[ports]]
+localPort = 43129
+externalPort = 3001
