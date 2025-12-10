@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -14,9 +15,14 @@ import Animated, {
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 import { ThemedText } from "@/components/ThemedText";
 import { BrandColors, Spacing, BorderRadius } from "@/constants/theme";
-import { ReconstructionAPI, ReconstructionJob } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { MainStackParamList } from "@/navigation/MainNavigator";
+
+// 🔹 NEW: Firestore-based uploads
+import {
+  listenToUserUploads,
+  EarUpload,
+} from "@/services/dbService";
 
 type ReconstructionStatusScreenProps = {
   navigation: NativeStackNavigationProp<
@@ -27,51 +33,129 @@ type ReconstructionStatusScreenProps = {
 
 type StepKey = "queued" | "processing" | "completed";
 
-const STEPS: { key: StepKey; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+const STEPS: {
+  key: StepKey;
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+}[] = [
   { key: "queued", label: "Queued", icon: "clock" },
   { key: "processing", label: "Processing", icon: "cpu" },
   { key: "completed", label: "Completed", icon: "check-circle" },
 ];
 
+// 🔹 Local Job type derived from Firestore uploads
+type JobStatus = "queued" | "processing" | "completed" | "failed";
+
+type Job = {
+  id: string;
+  status: JobStatus;
+  progress: number; // 0–100
+  completedAt: number | null;
+  errorMessage?: string;
+};
+
 export default function ReconstructionStatusScreen({
   navigation,
 }: ReconstructionStatusScreenProps) {
   const { user } = useAuth();
-  const [job, setJob] = useState<ReconstructionJob | null>(null);
+  const [job, setJob] = useState<Job | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const pulseScale = useSharedValue(1);
 
-  const loadLatestJob = useCallback(async () => {
-    if (!user) return;
-    
-    try {
-      const latestJob = await ReconstructionAPI.getLatestUserJob(user.id);
-      setJob(latestJob);
-    } catch (error) {
-      console.error("Failed to load job:", error);
-    } finally {
+  const pulseScale = useSharedValue(1);
+  const insets = useSafeAreaInsets();
+  const TOP_EXTRA = 70;
+
+  // 🔹 Map Firestore EarUpload → Job
+  const mapUploadToJob = (upload: EarUpload): Job => {
+  let status: JobStatus;
+  let progress = 0;
+
+  switch (upload.status) {
+    case "pending":
+      status = "queued";
+      progress = 10;
+      break;
+
+    case "processing":
+      status = "processing";
+      progress = 60;
+      break;
+
+    case "done":
+      status = "completed";
+      progress = 100;
+      break;
+
+    case "failed":
+    default:
+      status = "failed";
+      progress = 0;
+      break;
+  }
+
+  const completedAt =
+    upload.status === "done" &&
+    (upload.createdAt as any)?.toMillis
+      ? (upload.createdAt as any).toMillis()
+      : null;
+
+  return {
+    id: upload.id || "unknown",
+    status,
+    progress,
+    completedAt,
+    errorMessage:
+      upload.status === "failed"
+        ? "An error occurred during processing."
+        : undefined,
+  };
+};
+
+
+  // 🔹 Subscribe to Firestore uploads for this user
+  useEffect(() => {
+    if (!user) {
       setIsLoading(false);
+      return;
     }
+
+    const unsubscribe = listenToUserUploads(user.id, (uploads) => {
+      if (!uploads || uploads.length === 0) {
+        setJob(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // pick latest upload by createdAt
+      const sorted = [...uploads].sort((a, b) => {
+        const ta = (a.createdAt as any)?.toMillis
+          ? (a.createdAt as any).toMillis()
+          : 0;
+        const tb = (b.createdAt as any)?.toMillis
+          ? (b.createdAt as any).toMillis()
+          : 0;
+        return tb - ta;
+      });
+
+      const latest = sorted[0];
+      const j = mapUploadToJob(latest);
+      setJob(j);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadLatestJob();
-      
-      const interval = setInterval(loadLatestJob, 2000);
-      return () => clearInterval(interval);
-    }, [loadLatestJob])
-  );
-
+  // 🔹 Pulse animation for processing state
   useEffect(() => {
     if (job?.status === "processing") {
       pulseScale.value = withRepeat(
         withSequence(
           withTiming(1.1, { duration: 800 }),
-          withTiming(1, { duration: 800 }),
+          withTiming(1, { duration: 800 })
         ),
         -1,
-        false,
+        false
       );
     } else {
       pulseScale.value = withTiming(1, { duration: 200 });
@@ -84,7 +168,7 @@ export default function ReconstructionStatusScreen({
 
   const getStepStatus = (stepKey: StepKey) => {
     if (!job) return "pending";
-    
+
     const stepOrder: StepKey[] = ["queued", "processing", "completed"];
     const currentStatus = job.status === "failed" ? "processing" : job.status;
     const currentIndex = stepOrder.indexOf(currentStatus as StepKey);
@@ -100,9 +184,17 @@ export default function ReconstructionStatusScreen({
     return new Date(timestamp).toLocaleString();
   };
 
+  // -------------------------------
+  // LOADING STATE
+  // -------------------------------
   if (isLoading) {
     return (
-      <ScreenScrollView contentContainerStyle={styles.scrollContent}>
+      <ScreenScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + TOP_EXTRA },
+        ]}
+      >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BrandColors.primaryBlue} />
         </View>
@@ -110,25 +202,36 @@ export default function ReconstructionStatusScreen({
     );
   }
 
+  // -------------------------------
+  // EMPTY STATE (NO JOB)
+  // -------------------------------
   if (!job) {
     return (
-      <ScreenScrollView contentContainerStyle={styles.scrollContent}>
+      <ScreenScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + TOP_EXTRA },
+        ]}
+      >
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
             <Feather name="inbox" size={48} color="#CCC" />
           </View>
+
           <ThemedText type="h4" style={styles.emptyTitle}>
             No Active Reconstruction
           </ThemedText>
+
           <ThemedText type="body" style={styles.emptyText}>
             Upload ear photos to start the 3D reconstruction process
           </ThemedText>
+
           <Pressable
             style={({ pressed }) => [
               styles.startButton,
               pressed && styles.buttonPressed,
             ]}
-            onPress={() => navigation.navigate("CameraCapture")}
+            onPress={() => navigation.navigate("Upload")}
           >
             <Feather name="camera" size={20} color={BrandColors.white} />
             <ThemedText
@@ -145,12 +248,21 @@ export default function ReconstructionStatusScreen({
     );
   }
 
+  // -------------------------------
+  // MAIN SCREEN
+  // -------------------------------
   return (
-    <ScreenScrollView contentContainerStyle={styles.scrollContent}>
+    <ScreenScrollView
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingTop: insets.top + TOP_EXTRA },
+      ]}
+    >
       <View style={styles.header}>
         <ThemedText type="h3" style={styles.title}>
           3D Reconstruction
         </ThemedText>
+
         <ThemedText type="body" style={styles.subtitle}>
           {job.status === "completed"
             ? "Your ear model is ready!"
@@ -176,6 +288,7 @@ export default function ReconstructionStatusScreen({
         </View>
       )}
 
+      {/* STEPS */}
       <View style={styles.stepsContainer}>
         {STEPS.map((step, index) => {
           const stepStatus = getStepStatus(step.key);
@@ -193,11 +306,7 @@ export default function ReconstructionStatusScreen({
                   ]}
                 >
                   {stepStatus === "completed" ? (
-                    <Feather
-                      name="check"
-                      size={20}
-                      color={BrandColors.white}
-                    />
+                    <Feather name="check" size={20} color={BrandColors.white} />
                   ) : (
                     <Feather
                       name={step.icon}
@@ -210,6 +319,7 @@ export default function ReconstructionStatusScreen({
                     />
                   )}
                 </Animated.View>
+
                 {!isLast && (
                   <View
                     style={[
@@ -230,22 +340,27 @@ export default function ReconstructionStatusScreen({
                 >
                   {step.label}
                 </ThemedText>
-                {stepStatus === "active" && step.key === "processing" && (
-                  <ThemedText type="small" style={styles.stepDescription}>
-                    Analyzing ear geometry and creating 3D model...
-                  </ThemedText>
-                )}
-                {stepStatus === "completed" && step.key === "completed" && (
-                  <ThemedText type="small" style={styles.stepDescription}>
-                    Completed at {formatDate(job.completedAt)}
-                  </ThemedText>
-                )}
+
+                {stepStatus === "active" &&
+                  step.key === "processing" && (
+                    <ThemedText type="small" style={styles.stepDescription}>
+                      Analyzing ear geometry and creating 3D model...
+                    </ThemedText>
+                  )}
+
+                {stepStatus === "completed" &&
+                  step.key === "completed" && (
+                    <ThemedText type="small" style={styles.stepDescription}>
+                      Completed at {formatDate(job.completedAt)}
+                    </ThemedText>
+                  )}
               </View>
             </View>
           );
         })}
       </View>
 
+      {/* COMPLETED SCREEN */}
       {job.status === "completed" && (
         <View style={styles.completedSection}>
           <Pressable
@@ -253,7 +368,9 @@ export default function ReconstructionStatusScreen({
               styles.modelPreview,
               pressed && styles.modelPreviewPressed,
             ]}
-            onPress={() => navigation.navigate("ModelViewer", { jobId: job.id })}
+            onPress={() =>
+              navigation.navigate("ModelViewer", { jobId: job.id } as any)
+            }
           >
             <View style={styles.modelPlaceholder}>
               <Feather name="box" size={48} color={BrandColors.primaryBlue} />
@@ -271,7 +388,9 @@ export default function ReconstructionStatusScreen({
               styles.viewModelButton,
               pressed && styles.buttonPressed,
             ]}
-            onPress={() => navigation.navigate("ModelViewer", { jobId: job.id })}
+            onPress={() =>
+              navigation.navigate("ModelViewer", { jobId: job.id } as any)
+            }
           >
             <Feather name="eye" size={20} color={BrandColors.darkText} />
             <ThemedText
@@ -289,7 +408,9 @@ export default function ReconstructionStatusScreen({
               styles.orderButton,
               pressed && styles.buttonPressed,
             ]}
-            onPress={() => navigation.navigate("CreateOrder", { jobId: job.id })}
+            onPress={() =>
+              navigation.navigate("CreateOrder", { jobId: job.id } as any)
+            }
           >
             <Feather name="shopping-cart" size={20} color={BrandColors.white} />
             <ThemedText
@@ -321,14 +442,17 @@ export default function ReconstructionStatusScreen({
         </View>
       )}
 
+      {/* FAILED */}
       {job.status === "failed" && (
         <View style={styles.errorSection}>
           <View style={styles.errorCard}>
             <Feather name="alert-circle" size={24} color="#DC3545" />
             <ThemedText type="body" style={styles.errorText}>
-              {job.errorMessage || "An error occurred during processing. Please try again."}
+              {job.errorMessage ||
+                "An error occurred during processing. Please try again."}
             </ThemedText>
           </View>
+
           <Pressable
             style={({ pressed }) => [
               styles.retryButton,

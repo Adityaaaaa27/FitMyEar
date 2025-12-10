@@ -2,6 +2,8 @@ import React from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -117,9 +119,17 @@ function DashboardCard({
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { user, isAdmin } = useAuth();
+  const insets = useSafeAreaInsets();
 
   return (
-    <ScreenScrollView contentContainerStyle={styles.scrollContent}>
+    <ScreenScrollView
+  contentContainerStyle={[
+    styles.scrollContent,
+    { paddingTop: insets.top + 90
+ }
+  ]}
+>
+
       <View style={styles.welcomeSection}>
         <ThemedText type="h2" style={styles.welcomeTitle}>
           Welcome{user?.name ? `, ${user.name}` : ""}

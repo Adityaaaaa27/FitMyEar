@@ -1,4 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
+import * as ImageManipulator from "expo-image-manipulator";
+
+import { validateEar } from "../services/earValidation";
+
 import {
   View,
   StyleSheet,
@@ -27,14 +31,19 @@ type CameraCaptureScreenProps = {
   navigation: NativeStackNavigationProp<MainStackParamList, "CameraCapture">;
 };
 
+const SCAN_TARGET_COUNT = 20; // how many photos we want for COLMAP
+const SCAN_DELAY_MS = 500; // delay between photos
+
 export default function CameraCaptureScreen({
   navigation,
 }: CameraCaptureScreenProps) {
   const insets = useSafeAreaInsets();
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<CameraView | null>(null);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string>("");
 
@@ -45,12 +54,15 @@ export default function CameraCaptureScreen({
   const loadPhotos = async () => {
     const stored = await PhotoStorage.getPhotos();
     setPhotos(stored);
+    setScanProgress(stored.length);
   };
 
   const triggerVibration = async () => {
     try {
       if (Platform.OS === "web") {
+        // @ts-ignore - web vibration
         if ("vibrate" in navigator) {
+          // @ts-ignore
           navigator.vibrate(100);
         }
       } else {
@@ -61,25 +73,158 @@ export default function CameraCaptureScreen({
     }
   };
 
-  const capturePhoto = async () => {
-    if (!cameraRef.current || isCapturing) return;
+  // OLD
+// const captureSinglePhoto = async (): Promise<void> => {
 
-    setIsCapturing(true);
-    
-    await triggerVibration();
+// Crop a rectangle around the ear region before sending to the model
+const cropEarRegion = async (photo: {
+  uri: string;
+  width: number;
+  height: number;
+}) => {
+  const { width, height } = photo;
+
+  // tweak these numbers after testing:
+  // - we take a vertical rectangle in the center
+  // - 60% of width, 70% of height
+  const cropWidth = width * 0.6;
+  const cropHeight = height * 0.7;
+
+  const originX = (width - cropWidth) / 2;  // center horizontally
+  const originY = (height - cropHeight) / 2; // center vertically
+
+  const result = await ImageManipulator.manipulateAsync(
+    photo.uri,
+    [
+      {
+        crop: {
+          originX,
+          originY,
+          width: cropWidth,
+          height: cropHeight,
+        },
+      },
+    ],
+    {
+      compress: 0.9,
+      format: ImageManipulator.SaveFormat.JPEG,
+    }
+  );
+
+  // result.uri is a new image that is just the cropped region
+  return result.uri;
+};
+
+// NEW
+const captureSinglePhoto = async (): Promise<boolean> => {
+  if (!cameraRef.current) return false;
+
+  await triggerVibration();
+
+  try {
+    const photo = await cameraRef.current.takePictureAsync({
+      quality: 0.8,
+      skipProcessing: true,
+    });
+
+    if (!photo || !photo.uri) return false;
+
+    // 🔴 NEW: crop to ear region
+    const croppedUri = await cropEarRegion(photo);
+
+    // 🔍 validate on backend using CROPPED image
+    let result;
+    try {
+      result = await validateEar(croppedUri);
+    } catch (err) {
+      console.error("Ear validation error:", err);
+      if (!isScanning) {
+        Alert.alert(
+          "Validation error",
+          "Could not verify the photo. Check your internet connection and try again."
+        );
+      }
+      return false;
+    }
+
+    if (!result?.isEar) {
+      console.log(
+        "Photo rejected by ear classifier:",
+        result?.predictedClass,
+        "conf:",
+        result?.earConfidence
+      );
+
+      Alert.alert(
+        "Ear not detected",
+        "Please align your ear inside the guide, then start scanning again."
+      );
+      return false;
+    }
+
+    // ✅ Save CROPPED image, not the huge original
+    const saved = await PhotoStorage.savePhoto(croppedUri);
+    setPhotos((prev) => [...prev, saved]);
+    setScanProgress((prev) => prev + 1);
+
+    return true;
+  } catch (error) {
+    console.error("Failed to capture photo:", error);
+    if (!isScanning) {
+      Alert.alert("Error", "Failed to capture photo");
+    }
+    return false;
+  }
+};
+
+
+
+
+  const delay = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const startAutoScan = async () => {
+    if (isScanning) return;
+    if (!cameraRef.current) {
+      Alert.alert(
+        "Camera not ready",
+        "Please wait a moment and try again.",
+      );
+      return;
+    }
+
+    // If there are already photos, we can either continue to 20
+    // or clear and start fresh. Here we CONTINUE to 20.
+    if (photos.length >= SCAN_TARGET_COUNT) {
+      Alert.alert(
+        "Photos already captured",
+        `You already have ${photos.length} photos. You can delete some if you want to rescan.`,
+      );
+      return;
+    }
+
+    setIsScanning(true);
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-      });
-      if (photo) {
-        const saved = await PhotoStorage.savePhoto(photo.uri);
-        setPhotos((prev) => [...prev, saved]);
-      }
+      for (let i = photos.length; i < SCAN_TARGET_COUNT; i++) {
+  const ok = await captureSinglePhoto();
+
+  if (!ok) {
+    // ❌ stop auto-scan immediately on first bad frame
+    break;
+  }
+
+  await delay(SCAN_DELAY_MS);
+}
+
     } catch (error) {
-      Alert.alert("Error", "Failed to capture photo");
+      console.error("Auto scan error:", error);
+      Alert.alert(
+        "Scan interrupted",
+        "Something went wrong while capturing photos.",
+      );
     } finally {
-      setIsCapturing(false);
+      setIsScanning(false);
     }
   };
 
@@ -93,6 +238,7 @@ export default function CameraCaptureScreen({
       if (!result.canceled && result.assets[0]) {
         const saved = await PhotoStorage.savePhoto(result.assets[0].uri);
         setPhotos((prev) => [...prev, saved]);
+        setScanProgress((prev) => prev + 1);
       }
     } catch (error) {
       Alert.alert("Error", "Failed to pick image");
@@ -101,7 +247,11 @@ export default function CameraCaptureScreen({
 
   const deletePhoto = async (id: string) => {
     await PhotoStorage.deletePhoto(id);
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    setPhotos((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      setScanProgress(updated.length);
+      return updated;
+    });
   };
 
   const openLightbox = (uri: string) => {
@@ -115,20 +265,22 @@ export default function CameraCaptureScreen({
   };
 
   const handleDone = () => {
-    if (photos.length === 0) {
+    if (photos.length < SCAN_TARGET_COUNT) {
       Alert.alert(
-        "No Photos",
-        "Please capture at least one photo before continuing",
+        "More photos needed",
+        `For accurate 3D reconstruction, please capture at least ${SCAN_TARGET_COUNT} photos.\n\nCurrently: ${photos.length}/${SCAN_TARGET_COUNT}`,
       );
       return;
     }
+
     navigation.navigate("Upload");
   };
 
+  // PERMISSIONS UI
   if (!permission) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ThemedText type="body">Loading camera...</ThemedText>
+        <ThemedText style={styles.permissionTitle}>Loading camera...</ThemedText>
       </View>
     );
   }
@@ -145,104 +297,94 @@ export default function CameraCaptureScreen({
         ]}
       >
         <View style={styles.permissionIcon}>
-          <Feather name="camera-off" size={48} color={BrandColors.primaryCoral} />
+          <Feather name="camera-off" size={40} color={BrandColors.primaryCoral} />
         </View>
-        <ThemedText type="h3" style={styles.permissionTitle}>
+        <ThemedText style={styles.permissionTitle}>
           Camera Access Required
         </ThemedText>
-        <ThemedText type="body" style={styles.permissionText}>
-          FitMyEar needs camera access to capture photos of your ear for
-          creating custom-fit ear pieces.
+        <ThemedText style={styles.permissionText}>
+          FitMyEar needs camera access to capture photos of your ear for creating
+          custom-fit ear pieces.
         </ThemedText>
 
-        {canAskAgain ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.permissionButton,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={requestPermission}
-          >
-            <ThemedText
-              type="body"
-              style={styles.buttonText}
-              lightColor={BrandColors.white}
-              darkColor={BrandColors.white}
-            >
-              Enable Camera
-            </ThemedText>
-          </Pressable>
-        ) : Platform.OS !== "web" ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.permissionButton,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={async () => {
-              try {
-                await Linking.openSettings();
-              } catch (error) {
-                Alert.alert(
-                  "Unable to open settings",
-                  "Please enable camera access in your device settings.",
-                );
-              }
-            }}
-          >
-            <ThemedText
-              type="body"
-              style={styles.buttonText}
-              lightColor={BrandColors.white}
-              darkColor={BrandColors.white}
-            >
-              Open Settings
-            </ThemedText>
-          </Pressable>
-        ) : (
-          <ThemedText type="small" style={styles.permissionNote}>
-            Run in Expo Go to use this feature
+        <Pressable
+          style={({ pressed }) => [
+            styles.permissionButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={
+            canAskAgain
+              ? requestPermission
+              : async () => {
+                  try {
+                    await Linking.openSettings();
+                  } catch (error) {
+                    Alert.alert(
+                      "Unable to open settings",
+                      "Please enable camera access in your device settings.",
+                    );
+                  }
+                }
+          }
+        >
+          <ThemedText style={styles.buttonText}>
+            {canAskAgain ? "Enable Camera" : "Open Settings"}
+          </ThemedText>
+        </Pressable>
+
+        {Platform.OS !== "web" ? null : (
+          <ThemedText style={styles.permissionNote}>
+            Run this app in Expo Go on your phone to use the camera feature.
           </ThemedText>
         )}
 
         <Pressable
-          style={styles.galleryLink}
+          style={({ pressed }) => [
+            styles.galleryLink,
+            pressed && styles.buttonPressed,
+          ]}
           onPress={pickImage}
         >
-          <ThemedText
-            type="body"
-            lightColor={BrandColors.primaryCoral}
-            darkColor={BrandColors.primaryCoral}
-          >
-            Or select from gallery
-          </ThemedText>
+          <ThemedText>Or select from gallery</ThemedText>
         </Pressable>
       </View>
     );
   }
 
+  // MAIN CAMERA UI
   return (
-    <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing="back">
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}
+    >
+      <View style={styles.camera}>
+        <CameraView
+          ref={(ref) => {
+            cameraRef.current = ref;
+          }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Overlay with ear guide */}
         <View style={styles.overlay}>
           <View style={styles.earGuide}>
             <View style={styles.earOutline} />
           </View>
-          <View
-            style={[styles.instructionContainer, { paddingTop: insets.top + 60 }]}
-          >
-            <ThemedText
-              type="body"
-              style={styles.instruction}
-              lightColor={BrandColors.white}
-              darkColor={BrandColors.white}
-            >
-              Position your ear within the guide
-            </ThemedText>
+
+          <View style={styles.instructionContainer}>
+            <View style={styles.instruction}>
+              <ThemedText>
+                Slowly rotate your head while we capture {SCAN_TARGET_COUNT} photos.
+              </ThemedText>
+            </View>
           </View>
         </View>
-      </CameraView>
+      </View>
 
-      <View style={[styles.controls, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      {/* Controls & Thumbnails */}
+      <View style={styles.controls}>
         {photos.length > 0 ? (
           <ScrollView
             horizontal
@@ -266,50 +408,60 @@ export default function CameraCaptureScreen({
           </ScrollView>
         ) : (
           <View style={styles.thumbnailPlaceholder}>
-            <ThemedText type="small" style={styles.thumbnailPlaceholderText}>
+            <ThemedText style={styles.thumbnailPlaceholderText}>
               Captured photos will appear here
             </ThemedText>
           </View>
         )}
 
         <View style={styles.buttonRow}>
+          {/* Gallery button (optional) */}
           <Pressable
             style={({ pressed }) => [
               styles.secondaryButton,
               pressed && styles.buttonPressed,
             ]}
             onPress={pickImage}
+            disabled={isScanning}
           >
-            <Feather name="image" size={24} color={BrandColors.primaryCoral} />
+            <Feather
+              name="image"
+              size={24}
+              color={BrandColors.primaryDark}
+            />
           </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.captureButton,
-              pressed && styles.captureButtonPressed,
-              isCapturing && styles.captureButtonDisabled,
-            ]}
-            onPress={capturePhoto}
-            disabled={isCapturing}
-          >
-            <View style={styles.captureButtonInner} />
-          </Pressable>
+          {/* Auto-scan capture button */}
+          <View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.captureButton,
+                pressed && !isScanning && styles.captureButtonPressed,
+                isScanning && styles.captureButtonDisabled,
+              ]}
+              onPress={startAutoScan}
+              disabled={isScanning}
+            >
+              <View style={styles.captureButtonInner} />
+            </Pressable>
+            <ThemedText style={styles.scanLabel}>
+              {isScanning
+                ? `Scanning… ${scanProgress}/${SCAN_TARGET_COUNT}`
+                : `Tap once to capture ${SCAN_TARGET_COUNT} photos`}
+            </ThemedText>
+          </View>
 
+          {/* Done button */}
           <Pressable
             style={({ pressed }) => [
               styles.doneButton,
               pressed && styles.buttonPressed,
-              photos.length === 0 && styles.doneButtonDisabled,
+              photos.length < SCAN_TARGET_COUNT && styles.doneButtonDisabled,
             ]}
             onPress={handleDone}
           >
-            <ThemedText
-              type="body"
-              style={styles.doneButtonText}
-              lightColor={BrandColors.white}
-              darkColor={BrandColors.white}
-            >
-              Done ({photos.length})
+            <ThemedText style={[styles.buttonText, styles.doneButtonText]}>
+              Done ({photos.length}/{SCAN_TARGET_COUNT})
             </ThemedText>
           </Pressable>
         </View>
@@ -432,13 +584,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  captureButtonPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.95 }],
-  },
-  captureButtonDisabled: {
-    opacity: 0.5,
-  },
   captureButtonInner: {
     width: 64,
     height: 64,
@@ -446,6 +591,13 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.white,
     borderWidth: 4,
     borderColor: BrandColors.primaryCoral,
+  },
+  captureButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.95 }],
+  },
+  captureButtonDisabled: {
+    opacity: 0.5,
   },
   doneButton: {
     height: 56,
@@ -460,6 +612,11 @@ const styles = StyleSheet.create({
   },
   doneButtonText: {
     fontWeight: "600",
+  },
+  scanLabel: {
+    marginTop: Spacing.xs,
+    textAlign: "center",
+    fontSize: 12,
   },
   buttonPressed: {
     opacity: 0.8,

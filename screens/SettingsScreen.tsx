@@ -8,6 +8,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { BrandColors, Spacing, BorderRadius } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { MainStackParamList } from "@/navigation/MainNavigator";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type SettingsScreenProps = {
   navigation: NativeStackNavigationProp<MainStackParamList, "Settings">;
@@ -63,6 +64,8 @@ function SettingsItem({
 
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { user, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -100,7 +103,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   };
 
   return (
-    <ScreenScrollView contentContainerStyle={styles.scrollContent}>
+    <ScreenScrollView
+  contentContainerStyle={[
+    styles.scrollContent,
+    { paddingTop: insets.top + 80
+ }  // Add extra padding
+  ]}
+>
+
       <View style={styles.profileSection}>
         <View style={styles.profileAvatar}>
           <Feather name="user" size={32} color={BrandColors.primaryBlue} />

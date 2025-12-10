@@ -9,6 +9,10 @@ import {
   Alert,
   Dimensions,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -94,220 +98,237 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
     }
   };
 
+  const keyboardVerticalOffset = insets.top + 10;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          hitSlop={10}
+    <KeyboardAvoidingView
+  style={{ flex: 1 }} // keep transparent, move visual bg to inner containers
+  behavior={Platform.OS === "ios" ? "padding" : "height"}
+  keyboardVerticalOffset={keyboardVerticalOffset}
+>
+
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top - 20
+ },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Feather name="arrow-left" size={24} color={BrandColors.warmBrown} />
-        </Pressable>
-        <ThemedText type="h4" style={styles.brandName}>
-          FitMyEar
-        </ThemedText>
-        <Pressable style={styles.helpButton} hitSlop={10}>
-          <Feather name="help-circle" size={24} color={BrandColors.warmBrown} />
-        </Pressable>
-      </View>
-
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.illustrationContainer}>
-          <Image
-            source={require("../assets/images/person_with_custom_ear_device.png")}
-            style={styles.illustration}
-            resizeMode="contain"
-          />
-        </View>
-
-        <View style={styles.contentContainer}>
-          <ThemedText type="h2" style={styles.title}>
-            Create Account
-          </ThemedText>
-          <ThemedText type="body" style={styles.subtitle}>
-            Join FitMyEar and get your perfect custom-fit ear pieces
-          </ThemedText>
-
-          <View style={styles.toggleContainer}>
+          <View style={styles.header}>
             <Pressable
-              style={[
-                styles.toggleButton,
-                !usePhone && styles.toggleButtonActive,
-              ]}
-              onPress={() => setUsePhone(false)}
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              hitSlop={10}
             >
-              <ThemedText
-                type="small"
-                style={[
-                  styles.toggleText,
-                  !usePhone && styles.toggleTextActive,
-                ]}
-              >
-                Email
-              </ThemedText>
+              <Feather name="arrow-left" size={24} color={BrandColors.warmBrown} />
             </Pressable>
-            <Pressable
-              style={[
-                styles.toggleButton,
-                usePhone && styles.toggleButtonActive,
-              ]}
-              onPress={() => setUsePhone(true)}
-            >
-              <ThemedText
-                type="small"
-                style={[
-                  styles.toggleText,
-                  usePhone && styles.toggleTextActive,
-                ]}
-              >
-                Phone
-              </ThemedText>
+            <ThemedText type="h4" style={styles.brandName}>
+              FitMyEar
+            </ThemedText>
+            <Pressable style={styles.helpButton} hitSlop={10}>
+              <Feather name="help-circle" size={24} color={BrandColors.warmBrown} />
             </Pressable>
           </View>
 
-          <View style={styles.form}>
-            <View
-              style={[
-                styles.inputContainer,
-                focusedField === "name" && styles.inputFocused,
-              ]}
-            >
-              <TextInput
-                style={styles.input}
-                placeholder="Full Name"
-                placeholderTextColor="#999"
-                value={name}
-                onChangeText={setName}
-                autoCorrect={false}
-                onFocus={() => setFocusedField("name")}
-                onBlur={() => setFocusedField(null)}
-              />
+          <View style={styles.illustrationContainer}>
+            <Image
+              source={require("../assets/images/person_with_custom_ear_device.png")}
+              style={styles.illustration}
+              resizeMode="contain"
+            />
+          </View>
+
+          <View style={styles.contentContainer}>
+            <ThemedText type="h2" style={styles.title}>
+              Create Account
+            </ThemedText>
+            <ThemedText type="body" style={styles.subtitle}>
+              Join FitMyEar and get your perfect custom-fit ear pieces
+            </ThemedText>
+
+            <View style={styles.toggleContainer}>
+              <Pressable
+                style={[
+                  styles.toggleButton,
+                  !usePhone && styles.toggleButtonActive,
+                ]}
+                onPress={() => setUsePhone(false)}
+              >
+                <ThemedText
+                  type="small"
+                  style={[
+                    styles.toggleText,
+                    !usePhone && styles.toggleTextActive,
+                  ]}
+                >
+                  Email
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.toggleButton,
+                  usePhone && styles.toggleButtonActive,
+                ]}
+                onPress={() => setUsePhone(true)}
+              >
+                <ThemedText
+                  type="small"
+                  style={[
+                    styles.toggleText,
+                    usePhone && styles.toggleTextActive,
+                  ]}
+                >
+                  Phone
+                </ThemedText>
+              </Pressable>
             </View>
 
-            {usePhone ? (
+            <View style={styles.form}>
               <View
                 style={[
                   styles.inputContainer,
-                  focusedField === "phone" && styles.inputFocused,
+                  focusedField === "name" && styles.inputFocused,
                 ]}
               >
                 <TextInput
                   style={styles.input}
-                  placeholder="Phone Number"
+                  placeholder="Full Name"
                   placeholderTextColor="#999"
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  keyboardType="phone-pad"
-                  onFocus={() => setFocusedField("phone")}
+                  value={name}
+                  onChangeText={setName}
+                  autoCorrect={false}
+                  onFocus={() => setFocusedField("name")}
                   onBlur={() => setFocusedField(null)}
+                  returnKeyType="next"
                 />
               </View>
-            ) : (
-              <>
-                <View
-                  style={[
-                    styles.inputContainer,
-                    focusedField === "email" && styles.inputFocused,
-                  ]}
-                >
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email Address"
-                    placeholderTextColor="#999"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    onFocus={() => setFocusedField("email")}
-                    onBlur={() => setFocusedField(null)}
-                  />
-                </View>
 
+              {usePhone ? (
                 <View
                   style={[
                     styles.inputContainer,
-                    focusedField === "password" && styles.inputFocused,
+                    focusedField === "phone" && styles.inputFocused,
                   ]}
                 >
                   <TextInput
                     style={styles.input}
-                    placeholder="Password"
+                    placeholder="Phone Number"
                     placeholderTextColor="#999"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    onFocus={() => setFocusedField("password")}
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    keyboardType="phone-pad"
+                    onFocus={() => setFocusedField("phone")}
                     onBlur={() => setFocusedField(null)}
+                    returnKeyType="done"
                   />
                 </View>
+              ) : (
+                <>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedField === "email" && styles.inputFocused,
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Email Address"
+                      placeholderTextColor="#999"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onFocus={() => setFocusedField("email")}
+                      onBlur={() => setFocusedField(null)}
+                      returnKeyType="next"
+                    />
+                  </View>
 
-                <View
-                  style={[
-                    styles.inputContainer,
-                    focusedField === "confirmPassword" && styles.inputFocused,
-                  ]}
-                >
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Confirm Password"
-                    placeholderTextColor="#999"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry
-                    onFocus={() => setFocusedField("confirmPassword")}
-                    onBlur={() => setFocusedField(null)}
-                  />
-                </View>
-              </>
-            )}
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedField === "password" && styles.inputFocused,
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Password"
+                      placeholderTextColor="#999"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                      onFocus={() => setFocusedField("password")}
+                      onBlur={() => setFocusedField(null)}
+                      returnKeyType="next"
+                    />
+                  </View>
+
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedField === "confirmPassword" && styles.inputFocused,
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm Password"
+                      placeholderTextColor="#999"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry
+                      onFocus={() => setFocusedField("confirmPassword")}
+                      onBlur={() => setFocusedField(null)}
+                      returnKeyType="done"
+                    />
+                  </View>
+                </>
+              )}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  pressed && styles.buttonPressed,
+                  isLoading && styles.buttonDisabled,
+                ]}
+                onPress={usePhone ? handleSignUpWithPhone : handleSignUpWithEmail}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={BrandColors.white} />
+                ) : (
+                  <ThemedText type="body" style={styles.buttonText}>
+                    {usePhone ? "Send Verification Code" : "Create Account"}
+                  </ThemedText>
+                )}
+              </Pressable>
+            </View>
 
             <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                pressed && styles.buttonPressed,
-                isLoading && styles.buttonDisabled,
-              ]}
-              onPress={usePhone ? handleSignUpWithPhone : handleSignUpWithEmail}
-              disabled={isLoading}
+              style={styles.linkButton}
+              onPress={() => navigation.goBack()}
             >
-              {isLoading ? (
-                <ActivityIndicator color={BrandColors.white} />
-              ) : (
-                <ThemedText type="body" style={styles.buttonText}>
-                  {usePhone ? "Send Verification Code" : "Create Account"}
+              <ThemedText type="body" style={styles.linkText}>
+                Already have an account?{" "}
+                <ThemedText type="body" style={styles.linkTextAccent}>
+                  Sign In
                 </ThemedText>
-              )}
+              </ThemedText>
             </Pressable>
           </View>
-
-          <Pressable
-            style={styles.linkButton}
-            onPress={() => navigation.goBack()}
-          >
-            <ThemedText type="body" style={styles.linkText}>
-              Already have an account?{" "}
-              <ThemedText type="body" style={styles.linkTextAccent}>
-                Sign In
-              </ThemedText>
-            </ThemedText>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: BrandColors.warmPeach,
+    flexGrow: 1,
   },
   header: {
     flexDirection: "row",
@@ -343,8 +364,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
   },
   illustration: {
-    width: width * 0.5,
-    height: height * 0.15,
+    width: width * 0.7,
+    height: height * 0.18,
+    resizeMode: "contain",
   },
   contentContainer: {
     flex: 1,

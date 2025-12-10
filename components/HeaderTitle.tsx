@@ -12,7 +12,7 @@ export function HeaderTitle({ title }: HeaderTitleProps) {
   return (
     <View style={styles.container}>
       <Image
-        source={require("../assets/images/fitmyear-logo.png")}
+        source={require("../assets/images/logo.png")}
         style={styles.icon}
         resizeMode="contain"
       />

@@ -1,12 +1,23 @@
+// utils/storage.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// keys
 const PHOTOS_KEY = "@fitmyear_captured_photos";
 const STATUS_KEY = "@fitmyear_reconstruction_status";
+
+// angles used in CameraCaptureScreen
+export type EarAngle =
+  | "back_45"   // 1st
+  | "side"      // 2nd
+  | "front"     // 3rd
+  | "front_45"  // 4th
+  | "back";     // 5th
 
 export interface CapturedPhoto {
   id: string;
   uri: string;
   timestamp: number;
+  angle?: EarAngle | null; // optional so old data still works
 }
 
 export type ReconstructionStep = "queued" | "processing" | "completed";
@@ -28,13 +39,30 @@ export const PhotoStorage = {
     }
   },
 
-  async savePhoto(uri: string): Promise<CapturedPhoto> {
+  // uri + optional angle (camera gives angle, gallery may not)
+  async savePhoto(uri: string, angle?: EarAngle): Promise<CapturedPhoto> {
     const photos = await this.getPhotos();
+
+    // 🔐 global limit: only 5 photos total
+    if (photos.length >= 20) {
+      throw new Error("You can only store 20 photos.");
+    }
+
+    // 🔐 if angle given: only 1 photo per angle
+    if (angle) {
+      const existing = photos.find((p) => p.angle === angle);
+      if (existing) {
+        throw new Error("You already captured this ear angle.");
+      }
+    }
+
     const newPhoto: CapturedPhoto = {
       id: Date.now().toString(),
       uri,
       timestamp: Date.now(),
+      angle: angle ?? null,
     };
+
     photos.push(newPhoto);
     await AsyncStorage.setItem(PHOTOS_KEY, JSON.stringify(photos));
     return newPhoto;

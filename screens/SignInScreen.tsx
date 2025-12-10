@@ -4,10 +4,14 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Image,
   ActivityIndicator,
   Alert,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -17,6 +21,8 @@ import { ThemedText } from "@/components/ThemedText";
 import { BrandColors, Spacing, BorderRadius } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthStackParamList } from "@/navigation/AuthNavigator";
+
+import { Image } from "expo-image";
 
 const { width, height } = Dimensions.get("window");
 
@@ -32,6 +38,9 @@ export default function SignInScreen({ navigation }: SignInScreenProps) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  // image loading state for placeholder
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
@@ -50,125 +59,162 @@ export default function SignInScreen({ navigation }: SignInScreenProps) {
     }
   };
 
+  const keyboardVerticalOffset = insets.top + 10;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        {navigation.canGoBack() ? (
-          <Pressable
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            hitSlop={10}
-          >
-            <Feather name="arrow-left" size={24} color={BrandColors.warmBrown} />
-          </Pressable>
-        ) : (
-          <View style={styles.backButton} />
-        )}
-        <ThemedText type="h4" style={styles.brandName}>
-          FitMyEar
-        </ThemedText>
-        <Pressable style={styles.helpButton} hitSlop={10}>
-          <Feather name="help-circle" size={24} color={BrandColors.warmBrown} />
-        </Pressable>
-      </View>
-
-      <View style={styles.contentContainer}>
-        <View style={styles.content}>
-          <ThemedText type="h2" style={styles.title}>
-            Welcome Back!
-          </ThemedText>
-          <ThemedText type="body" style={styles.subtitle}>
-            Please fill the forms below to get started.{"\n"}
-            If you are not member yet, please click on{"\n"}
-            Register now below
-          </ThemedText>
-
-          <View style={styles.form}>
-            <View
-              style={[
-                styles.inputContainer,
-                focusedField === "email" && styles.inputFocused,
-              ]}
-            >
-              <TextInput
-                style={styles.input}
-                placeholder="Email Address"
-                placeholderTextColor="#999"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField(null)}
-              />
-            </View>
-
-            <View
-              style={[
-                styles.inputContainer,
-                focusedField === "password" && styles.inputFocused,
-              ]}
-            >
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#999"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField(null)}
-              />
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                pressed && styles.buttonPressed,
-                isLoading && styles.buttonDisabled,
-              ]}
-              onPress={handleSignIn}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color={BrandColors.white} />
-              ) : (
-                <ThemedText type="body" style={styles.buttonText}>
-                  Login
-                </ThemedText>
-              )}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={keyboardVerticalOffset}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.container,
+            { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 20) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            {navigation.canGoBack() ? (
+              <Pressable
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+                hitSlop={10}
+              >
+                <Feather name="arrow-left" size={24} color={BrandColors.warmBrown} />
+              </Pressable>
+            ) : (
+              <View style={styles.backButton} />
+            )}
+            <ThemedText type="h4" style={styles.brandName}>
+              FitMyEar
+            </ThemedText>
+            <Pressable style={styles.helpButton} hitSlop={10}>
+              <Feather name="help-circle" size={24} color={BrandColors.warmBrown} />
             </Pressable>
           </View>
 
-          <Pressable
-            style={styles.linkButton}
-            onPress={() => navigation.navigate("SignUp")}
-          >
-            <ThemedText type="body" style={styles.linkText}>
-              Not member?{" "}
-              <ThemedText type="body" style={styles.linkTextAccent}>
-                Register Now!
-              </ThemedText>
-            </ThemedText>
-          </Pressable>
-        </View>
-      </View>
+          <View style={styles.contentContainer}>
+            <View style={styles.content}>
+              {/* ===== LOGIN PAGE IMAGE: optimized ===== */}
+              <View style={styles.imageWrapper}>
+                {!imgLoaded && (
+                  <View style={styles.imagePlaceholder}>
+                    <ActivityIndicator color={BrandColors.warmOrange} />
+                  </View>
+                )}
 
-      <View style={styles.bottomIllustration}>
-        <Image
-          source={require("../assets/images/happy_people_with_ear_devices.png")}
-          style={styles.illustration}
-          resizeMode="contain"
-        />
-      </View>
-    </View>
+                <Image
+                  source={require("../assets/images/welcome.png")}
+                  style={styles.illustration}
+                  contentFit="contain"
+                  transition={250}
+                  cachePolicy="memory-disk"
+                  onLoad={() => setImgLoaded(true)}
+                />
+              </View>
+
+              <ThemedText type="h2" style={styles.title}>
+                Welcome Back!
+              </ThemedText>
+
+              <View style={styles.form}>
+                <View style={[styles.inputContainer, focusedField === "email" && styles.inputFocused]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email Address"
+                    placeholderTextColor="#999"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onFocus={() => setFocusedField("email")}
+                    onBlur={() => setFocusedField(null)}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={[styles.inputContainer, focusedField === "password" && styles.inputFocused]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor="#999"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    onFocus={() => setFocusedField("password")}
+                    onBlur={() => setFocusedField(null)}
+                    returnKeyType="done"
+                  />
+                </View>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    pressed && styles.buttonPressed,
+                    isLoading && styles.buttonDisabled,
+                  ]}
+                  onPress={handleSignIn}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color={BrandColors.white} />
+                  ) : (
+                    <ThemedText type="body" style={styles.buttonText}>
+                      Login
+                    </ThemedText>
+                  )}
+                </Pressable>
+              </View>
+
+              <Pressable style={styles.linkButton} onPress={() => navigation.navigate("SignUp")}>
+                <ThemedText type="body" style={styles.linkText}>
+                  Not member?{" "}
+                  <ThemedText type="body" style={styles.linkTextAccent}>
+                    Register Now!
+                  </ThemedText>
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.bottomIllustration} />
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  imageWrapper: {
+    alignItems: "center",
+    marginBottom: Spacing.xl,
+    width: Math.min(width * 0.9, 760),
+    height: Math.min(height * 0.28, 360),
+    alignSelf: "center",
+    overflow: "hidden",
+    borderRadius: 20,
+    justifyContent: "center",
+    backgroundColor: BrandColors.lightBackground,
+  },
+
+  imagePlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BrandColors.lightBackground,
+  },
+
+  illustration: {
+    width: "100%",
+    height: "100%",
+  },
+
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: BrandColors.warmCream,
   },
   header: {
@@ -262,9 +308,5 @@ const styles = StyleSheet.create({
   bottomIllustration: {
     alignItems: "center",
     paddingBottom: Spacing.lg,
-  },
-  illustration: {
-    width: width * 0.9,
-    height: height * 0.25,
   },
 });

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
   StyleSheet,
@@ -23,9 +24,15 @@ import { ThemedText } from "@/components/ThemedText";
 import { PhotoLightbox } from "@/components/PhotoLightbox";
 import { BrandColors, Spacing, BorderRadius } from "@/constants/theme";
 import { PhotoStorage, CapturedPhoto } from "@/utils/storage";
-import { PhotoAPI, ReconstructionAPI } from "@/services/api";
+import { ReconstructionAPI } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { MainStackParamList } from "@/navigation/MainNavigator";
+
+// 👉 NEW imports
+import { uploadImageAsync } from "@/services/storageService";
+import { createEarUpload } from "@/services/dbService";
+const REQUIRED_PHOTOS = 6; // number of angles we require
+
 
 type UploadScreenProps = {
   navigation: NativeStackNavigationProp<MainStackParamList, "Upload">;
@@ -39,6 +46,7 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string>("");
 
+  const insets = useSafeAreaInsets();
   const progressWidth = useSharedValue(0);
 
   const loadPhotos = useCallback(async () => {
@@ -96,44 +104,63 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
       return;
     }
 
-    if (photos.length === 0) {
-      Alert.alert("No Photos", "Please add photos first");
-      return;
-    }
+    if (photos.length < REQUIRED_PHOTOS) {
+  Alert.alert(
+    "More photos needed",
+    `You have captured ${photos.length} of ${REQUIRED_PHOTOS} required angles. Please capture all guided views first.`
+  );
+  return;
+}
+
 
     setIsUploading(true);
     setUploadProgress(0);
+    progressWidth.value = 0;
 
     try {
-      const photoData = photos.map((photo, index) => ({
-        uri: photo.uri,
-        side: (index % 2 === 0 ? "left" : "right") as "left" | "right",
-      }));
+      const uploadedRecords: { id: string; imageUrl: string }[] = [];
 
+      // 1️⃣ Upload each photo to Supabase + create Firestore record
       for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+
+        // Upload to Supabase Storage
+        const folderName =
+      user.email?.split("@")[0] || user.name || user.id; // fallback to id
+        const imageUrl = await uploadImageAsync(photo.uri, folderName);
+        console.log("Supabase public URL:", imageUrl);
+
+        // Create Firestore "uploads" doc
+        const uploadId = await createEarUpload(user.id, imageUrl);
+        uploadedRecords.push({ id: uploadId, imageUrl });
+
+        // Update progress (up to 80%)
         const progress = ((i + 1) / photos.length) * 80;
         progressWidth.value = withTiming(progress, {
           duration: 500,
           easing: Easing.bezier(0.25, 0.1, 0.25, 1),
         });
         setUploadProgress(Math.round(progress));
-        await new Promise((resolve) => setTimeout(resolve, 400));
       }
 
-      const uploadedPhotos = await PhotoAPI.uploadPhotos(user.id, photoData);
-      
-      progressWidth.value = withTiming(90, { duration: 300 });
-      setUploadProgress(90);
+      // 2️⃣ Call reconstruction job (if your backend is wired)
+      if (ReconstructionAPI?.createJob) {
+        progressWidth.value = withTiming(90, { duration: 300 });
+        setUploadProgress(90);
 
-      await ReconstructionAPI.createJob(
-        user.id,
-        uploadedPhotos.map((p) => p.id)
-      );
+        await ReconstructionAPI.createJob(
+          user.id,
+          uploadedRecords.map((p) => p.id)
+        );
+      }
 
+      // 3️⃣ Finish progress
       progressWidth.value = withTiming(100, { duration: 300 });
       setUploadProgress(100);
 
+      // 4️⃣ Clear local photos
       await PhotoStorage.clearPhotos();
+      setPhotos([]);
 
       setIsUploading(false);
 
@@ -152,22 +179,32 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
         ]
       );
     } catch (error) {
+      console.error("Upload failed:", error);
       setIsUploading(false);
-      const message = error instanceof Error ? error.message : "Upload failed. Please try again.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Upload failed. Please try again.";
       Alert.alert("Upload Failed", message);
     }
   };
 
   return (
-    <ScreenScrollView contentContainerStyle={styles.scrollContent}>
+    <ScreenScrollView
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingTop: insets.top + 70 }, // extra padding for safe area
+      ]}
+    >
       <View style={styles.header}>
         <ThemedText type="h3" style={styles.title}>
           Upload Your Photos
         </ThemedText>
         <ThemedText type="body" style={styles.subtitle}>
           {photos.length > 0
-            ? `${photos.length} photo${photos.length > 1 ? "s" : ""} ready to upload`
-            : "Select photos from your gallery"}
+  ? `${photos.length}/${REQUIRED_PHOTOS} photos captured`
+  : `You need ${REQUIRED_PHOTOS} guided photos before upload`}
+
         </ThemedText>
       </View>
 
@@ -175,7 +212,10 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
         <View style={styles.photosGrid}>
           {photos.map((photo) => (
             <View key={photo.id} style={styles.photoCard}>
-              <Pressable onPress={() => openLightbox(photo.uri)} style={styles.photoTouchable}>
+              <Pressable
+                onPress={() => openLightbox(photo.uri)}
+                style={styles.photoTouchable}
+              >
                 <Image source={{ uri: photo.uri }} style={styles.photoImage} />
               </Pressable>
               <Pressable
@@ -272,7 +312,11 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
                 ]}
                 onPress={handleUpload}
               >
-                <Feather name="upload-cloud" size={20} color={BrandColors.white} />
+                <Feather
+                  name="upload-cloud"
+                  size={20}
+                  color={BrandColors.white}
+                />
                 <ThemedText
                   type="body"
                   style={styles.uploadButtonText}
